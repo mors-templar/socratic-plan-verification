@@ -1,89 +1,53 @@
 # Socratic Plan Verification
 
-Socratic Plan Verification (SPV) checks a proposed design before code generation and checks the resulting artifact before delivery. This prototype applies the workflow to one accessibility task in a synthetic dashboard.
+Socratic Plan Verification (SPV) is an agent workflow for building and changing web interfaces. It puts an accessibility review before implementation and a browser verification step after implementation. Use it in a coding harness with subagents, or run the same roles in separate chats.
 
-The task deletes an item through a modal dialog. The developer explains where keyboard focus should move when the dialog's opener disappears. A reviewer checks that answer before the developer approves the revised plan. Playwright and axe-core then check the candidate.
+![SPV workflow with plan review and developer approval before build, followed by browser verification, repair or handoff](docs/images/spv-paper-workflow.png)
 
-## Quick start
+*Figure 2 from the SE4ALL paper, [From Guidance to Verification: Improving Web Accessibility in Agentic Software Development](docs/workflow.md#paper-figure).*
 
-Use Node.js 22 or later, npm, and Git. GitHub Actions runs the fixture checks on Windows with Node.js 24.
+## Install in your project
 
-```powershell
+Clone this repository and run the installer from its root. It uses Python 3.11 or later and the standard library. Replace `PROJECT_PATH` and choose one harness.
+
+```sh
 git clone https://github.com/mors-templar/socratic-plan-verification.git
 cd socratic-plan-verification
-npm.cmd ci
-npx.cmd playwright install chromium
-npm.cmd run demo
+python scripts/install.py --project "PROJECT_PATH" --harness codex
 ```
 
-Use npm and npx without the .cmd suffix in a POSIX shell. The demo runs locally with scripted fixture answers and requires no model account. It should verify one candidate and block four.
+Use `py -3` if Windows uses the Python launcher, or `python3` if your shell uses that command. Add `--dry-run` to preview the paths. The installer stops if an existing destination differs.
 
-| Fixture | Expected decision | Deciding check |
+| Harness | Installer argument | Native agent and skill locations |
 | --- | --- | --- |
-| good | VERIFIED_IN_SCOPE | All six checks pass |
-| blank | BLOCKED | Dashboard fails to render |
-| focus-leak | BLOCKED | Focus escapes the modal |
-| low-contrast | BLOCKED | Text contrast fails |
-| lost-focus | BLOCKED | Focus misses the Tasks heading after deletion |
+| Codex | `codex` | `.codex/agents/` and `.agents/skills/` |
+| Claude Code | `claude` | `.claude/agents/` and `.claude/skills/` |
+| OpenCode | `opencode` | `.opencode/agents/` and `.opencode/skills/` |
+| Other harnesses | `generic` | `.spv/` for manual loading |
 
-## Run the workflow
+Each option installs the portable files under `.spv/`. For manual installation, copy `agents/`, `skills/`, and [START.md](START.md) under `.spv/` in your project. For a chat with no filesystem access, paste or attach the [coordinator](agents/spv-coordinator.md), [skill](skills/spv-accessibility/SKILL.md), and [checklist](skills/spv-accessibility/references/checklist.md). Pass the individual role instructions and evidence to separate chats as needed.
 
-Run an interactive fixture and follow the review prompts.
+Open a fresh session from the target project. Paste the [starter prompt](START.md) and replace its placeholder with your request. The primary agent coordinates SPV. It can delegate to the installed roles or ask you to run a role in a separate session.
 
-```powershell
-npm.cmd start
-```
+## Use SPV
 
-1. Read the draft and answer the focus question. Give a reason for your answer.
-2. Review the decision and revise the answer if requested. Type APPROVE to approve the revised plan.
-3. Inspect the browser report for the saved candidate. The live adapter can use observed failures to attempt up to two repairs.
+1. Give the coordinator a web task and name the journeys or states that matter. It drafts a plan and a list of observable checks.
+2. A plan reviewer compares the plan with your original request, then asks a specific question about a material accessibility risk. Answer it, review the revision, and approve that exact plan before implementation.
+3. The builder implements the approved revision. A verifier runs the relevant interactions and checks against the actual build. For failed checks, the builder repairs the issue and the verifier tests the changed build.
+4. Read the scoped report. It identifies what passed, what failed, and what still needs manual evidence. Resolve required failures or missing evidence before calling the build verified.
 
-The six checks cover rendering, keyboard opening, focus containment, Escape and focus restoration, focus after deletion, and text contrast. VERIFIED_IN_SCOPE covers those checks in the tested browser states. A known failure blocks delivery. Missing or inconclusive evidence can require review. A scoped pass does not establish full Web Content Accessibility Guidelines (WCAG) conformance.
+Try the [delete-dialog example](examples/delete-dialog.md) to see the prompts, evidence, and handoff. See [Workflow and role handoffs](docs/workflow.md) for the full process, including a manual route when native subagents are unavailable.
 
-## Optional live Codex run
+## What is included
 
-Install and authenticate the Codex CLI and make the codex executable available on PATH. The live adapter sends the synthetic task and your review answer to Codex and saves the recorded responses locally.
-
-```powershell
-npm.cmd start -- --runner codex
-```
-
-Add --model ID to request a model. Add --scripted for an engineering replay with a scripted answer and approval. The default live adapter starts separate planner, reviewer, and builder sessions. Run npm.cmd start -- --help for the full option list.
-
-## Check a run
-
-The CLI prints the evidence directory. By default, it writes under runs/, which Git ignores. Keep custom output directories outside the checkout or under runs/.
-
-| File | What it records |
+| Component | Responsibility |
 | --- | --- |
-| draft.json and review-*.json | Plan, challenge, answers, and review decisions |
-| revised-plan.json and approval.json | Approved revision and its SHA-256 digest |
-| attempt-*/index.html and verification.json | Candidate, browser observations, and artifact digest |
-| run.json | Decision history and final status |
-| codex-*.json | Recorded response, session identifier, and usage for a live call |
+| [Coordinator](agents/spv-coordinator.md) | Draft the plan, collect the developer's answer and approval, and route work between roles |
+| [Plan reviewer](agents/spv-plan-reviewer.md) | Challenge a task-specific risk and review the exact revised plan |
+| [Builder](agents/spv-builder.md) | Implement an approved plan and repair verified failures |
+| [Verifier](agents/spv-verifier.md) | Check the running build and report evidence for each requirement |
+| [Accessibility skill](skills/spv-accessibility/SKILL.md) | Select applicable accessibility checks and distinguish automated from manual evidence |
 
-```powershell
-npm.cmd start -- --check-run 'runs/RUN_ID'
-```
+The kit supplies prompts and native agent definitions. The harness controls tool access and permissions. For tool-enforced gates, run planning and review with write access disabled and grant build access only after approval. Use your project's browser tools or perform the checks manually. A pass applies to the listed checks and the tested build.
 
-Replace RUN_ID with the printed directory name. For a demo, use runs/RUN_ID/good. The command checks that the current candidate, approval, contract, and verifier match the saved evidence. It assumes a trusted local evidence directory.
-
-Exit codes for a single run are 0 for VERIFIED_IN_SCOPE, 2 for BLOCKED, 3 for REVIEW_REQUIRED, and 1 for a command error.
-
-## Develop and test
-
-```powershell
-npm.cmd test
-npm.cmd run demo
-```
-
-| File | Purpose |
-| --- | --- |
-| contract.json | Dashboard request, focus challenge, and check definitions |
-| workflow.cjs | Review, approval, build, repair, and evidence checks |
-| verify.cjs | Chromium and axe-core checks |
-| codex.cjs | Optional Codex CLI adapter |
-| cli.cjs | Interactive and scripted entry points |
-| dashboard.html and prototype.test.cjs | Synthetic fixture and regression tests |
-
-Update the contract, fixture, and browser assertions together when you change the dashboard task. Keep generated candidates, session logs, and benchmark artifacts out of commits.
+Native installation paths follow the [Codex agent](https://developers.openai.com/codex/subagents/) and [skill](https://developers.openai.com/codex/skills/) docs, the [Claude Code agent](https://code.claude.com/docs/en/sub-agents) and [skill](https://code.claude.com/docs/en/skills) docs, and the [OpenCode agent](https://opencode.ai/docs/agents/) and [skill](https://opencode.ai/docs/skills/) docs.
