@@ -1,0 +1,19 @@
+{
+  "id": "dashboard-delete-v1",
+  "checklistVersion": "0.2.0",
+  "request": "Build a self-contained task dashboard for synthetic data. Show Task dashboard, a focusable Tasks heading, and two tasks named Review proposal and Check budget. Provide a button named Delete Review proposal for the first task. The button opens a modal named Delete task? with Cancel and Confirm deletion buttons. Escape cancels and restores focus to the opener. Confirmation removes Review proposal and its opener and places focus at the Tasks heading. Support keyboard operation and readable text in both states. Use one HTML file with inline CSS and JavaScript and no external resources.",
+  "checks": [
+    { "id": "render", "items": [], "expected": "The dashboard and required task controls render without a browser exception." },
+    { "id": "dialog-keyboard", "items": ["ACT-060", "ACT-122", "ACT-123"], "expected": "Enter on the delete button opens a named modal with focus on Cancel." },
+    { "id": "dialog-containment", "items": ["ACT-124", "ACT-125"], "expected": "Tab and Shift+Tab cycle between the modal controls." },
+    { "id": "cancel-focus", "items": ["ACT-126", "ACT-127"], "expected": "Escape closes the modal, preserves the task, and returns focus to its opener." },
+    { "id": "delete-focus", "items": ["ACT-128"], "expected": "Confirmation removes the task and opener, preserves the other task, and moves focus to the Tasks heading." },
+    { "id": "text-contrast", "items": ["ACT-042", "ACT-043"], "expected": "The entry and open-modal states have no detected text contrast failures or unresolved contrast findings." }
+  ],
+  "challenge": {
+    "id": "removed-opener",
+    "checkId": "delete-focus",
+    "question": "Confirming deletion removes the button that opened the dialog. Where should keyboard focus move, and why does that destination help the user continue?",
+    "destination": "Tasks heading"
+  }
+}
