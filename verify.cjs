@@ -40,6 +40,23 @@ async function openDialog(ui) {
   await focused(ui.cancel, 'Initial focus is not on Cancel.');
 }
 
+async function dismissDialog(page, dialog, key) {
+  const dismissal = await dialog.evaluateHandle(element => {
+    if (!(element instanceof HTMLDialogElement)) return null;
+    const state = { element, closed: false };
+    element.addEventListener('close', () => { state.closed = true; }, { once: true });
+    return state;
+  });
+  try {
+    await page.keyboard.press(key);
+    await dialog.waitFor({ state: 'hidden' });
+    // A native dialog can become hidden before its close handlers update the page.
+    await page.waitForFunction(state => !state || state.closed || !state.element.isConnected, dismissal);
+  } finally {
+    await dismissal.dispose();
+  }
+}
+
 async function check(report, id, verify) {
   try {
     report.checks.push({ id, status: 'PASS', observed: await verify() });
@@ -118,8 +135,7 @@ async function verifyHtml(bytes) {
         await check(report, 'cancel-focus', async () => {
           await page.goto(url);
           await openDialog(ui);
-          await page.keyboard.press('Escape');
-          await ui.dialog.waitFor({ state: 'hidden' });
+          await dismissDialog(page, ui.dialog, 'Escape');
           assert(await ui.task.isVisible() && await ui.other.isVisible(), 'Escape did not preserve both tasks.');
           await focused(ui.opener, 'Escape did not restore focus to the opener.');
           return 'Escape closed the dialog, preserved both tasks, and restored focus to the opener.';
@@ -129,8 +145,7 @@ async function verifyHtml(bytes) {
           await openDialog(ui);
           await page.keyboard.press('Tab');
           await focused(ui.confirm, 'Tab did not reach the confirmation button from Cancel.');
-          await page.keyboard.press('Enter');
-          await ui.dialog.waitFor({ state: 'hidden' });
+          await dismissDialog(page, ui.dialog, 'Enter');
           assert.equal(await ui.opener.count(), 0, 'The opener remains after confirmation.');
           assert.equal(await ui.task.count(), 0, 'The deleted task remains.');
           assert(await ui.other.isVisible(), 'Deletion removed the remaining task.');
